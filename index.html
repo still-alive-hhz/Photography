@@ -5,7 +5,7 @@
   <title>我的摄影作品集</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: Helvetica, Arial, sans-serif;
       background: #222;
       color: #fff;
       margin: 0;
@@ -81,6 +81,36 @@
       background: #ff9800;
       color: #222;
     }
+    .photo-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+      margin: 30px auto 0 auto;
+      max-width: 900px;
+    }
+    .photo-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: #333;
+      border-radius: 8px;
+      padding: 10px;
+      width: 160px;
+    }
+    .photo-item img {
+      width: 140px;
+      height: 100px;
+      object-fit: cover;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    .photo-item .photo-name {
+      color: #fff;
+      font-size: 1em;
+      text-align: center;
+      word-break: break-all;
+    }
     @media (max-width: 800px) {
       .slider-container, .date-selector {
         max-width: 98vw;
@@ -94,6 +124,13 @@
       .caption {
         margin-top: 210px;
       }
+      .photo-item {
+        width: 45vw;
+      }
+      .photo-item img {
+        width: 40vw;
+        height: 24vw;
+      }
     }
   </style>
 </head>
@@ -101,27 +138,40 @@
   <div class="slider-container" id="slider">
     <!-- 图片和标题会由JS插入 -->
   </div>
-  <div class="date-selector" id="dateSelector">
-    <!-- 日期按钮由JS插入 -->
-  </div>
+  <div class="date-selector" id="yearSelector"></div>
+  <div class="date-selector" id="monthSelector"></div>
+  <div class="date-selector" id="daySelector"></div>
+  <div id="photoGrid"></div>
   <script>
     // 配置你的图片、日期和名称
     const images = [
-      { src: 'photos/DSC05154.JPG', date: '2025-06-05', name: 'Road Riverbank' },
-      { src: 'photos/DSC05155.JPG', date: '2025-06-06', name: 'On Tang River' }
+      { src: 'photos/25/25-06/25-06-05/Road Riverbank.JPG', date: '2025-06-05', name: 'Road Riverbank' },
+      { src: 'photos/25/25-06/25-06-06/On Tang River.JPG', date: '2025-06-06', name: 'On Tang River' },
+      { src: 'photos/25/25-06/25-06-14/Hotel Redguards.jpg', date: '2025-06-07', name: 'Hotel Redguards' },
       // 继续添加你的图片
     ];
 
-    // 获取所有日期并去重
-    const dates = [...new Set(images.map(img => img.date))];
+    // 解析日期
+    images.forEach(img => {
+      const [year, month, day] = img.date.split('-');
+      img.year = year;
+      img.month = month;
+      img.day = day;
+    });
 
-    let currentIndex = 0;
-    let timer = null;
-    let currentDate = null; // null 表示全部
+    // 获取所有年份、月份、日期
+    const years = [...new Set(images.map(img => img.year))];
+    let selectedYear = null;
+    let selectedMonth = null;
+    let selectedDay = null;
 
     const slider = document.getElementById('slider');
-    const dateSelector = document.getElementById('dateSelector');
+    const yearSelector = document.getElementById('yearSelector');
+    const monthSelector = document.getElementById('monthSelector');
+    const daySelector = document.getElementById('daySelector');
+    const photoGrid = document.getElementById('photoGrid');
 
+    // 渲染轮播
     function renderSlider(filteredImages) {
       slider.innerHTML = '';
       filteredImages.forEach((img, idx) => {
@@ -147,57 +197,112 @@
       caption.textContent = filteredImages[idx]?.name || '';
     }
 
+    let timer = null;
     function startSlider(filteredImages) {
       if (timer) clearInterval(timer);
+      if (filteredImages.length === 0) return;
       let idx = 0;
       showImage(filteredImages, idx);
-      timer = setInterval(() => {
-        idx = (idx + 1) % filteredImages.length;
-        showImage(filteredImages, idx);
-      }, 3000);
-    }
-
-    function onDateSelect(date) {
-      currentDate = date;
-      // 按日期过滤
-      const filtered = date ? images.filter(img => img.date === date) : images;
-      renderSlider(filtered);
-      if (filtered.length > 1) {
-        startSlider(filtered);
-      } else if (filtered.length === 1) {
-        showImage(filtered, 0);
-        if (timer) clearInterval(timer);
+      if (filteredImages.length > 1) {
+        timer = setInterval(() => {
+          idx = (idx + 1) % filteredImages.length;
+          showImage(filteredImages, idx);
+        }, 3000);
       }
-      // 按钮高亮
-      Array.from(dateSelector.children).forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.date === date);
+    }
+
+    // 渲染年份选择器
+    function renderYearSelector() {
+      yearSelector.innerHTML = '';
+      years.forEach(year => {
+        const btn = document.createElement('button');
+        btn.textContent = year;
+        btn.className = 'date-btn' + (selectedYear === year ? ' active' : '');
+        btn.onclick = () => {
+          selectedYear = year;
+          selectedMonth = null;
+          selectedDay = null;
+          renderYearSelector();
+          renderMonthSelector();
+          renderDaySelector();
+          renderPhotoGrid();
+        };
+        yearSelector.appendChild(btn);
       });
     }
 
-    // 初始化日期选择器
-    function renderDateSelector() {
-      // 全部按钮
-      const allBtn = document.createElement('button');
-      allBtn.textContent = '全部';
-      allBtn.className = 'date-btn active';
-      allBtn.dataset.date = '';
-      allBtn.onclick = () => onDateSelect('');
-      dateSelector.appendChild(allBtn);
-      // 每个日期
-      dates.forEach(date => {
+    // 渲染月份选择器
+    function renderMonthSelector() {
+      monthSelector.innerHTML = '';
+      if (!selectedYear) return;
+      const months = [...new Set(images.filter(img => img.year === selectedYear).map(img => img.month))];
+      months.forEach(month => {
         const btn = document.createElement('button');
-        btn.textContent = date;
-        btn.className = 'date-btn';
-        btn.dataset.date = date;
-        btn.onclick = () => onDateSelect(date);
-        dateSelector.appendChild(btn);
+        btn.textContent = month;
+        btn.className = 'date-btn' + (selectedMonth === month ? ' active' : '');
+        btn.onclick = () => {
+          selectedMonth = month;
+          selectedDay = null;
+          renderMonthSelector();
+          renderDaySelector();
+          renderPhotoGrid();
+        };
+        monthSelector.appendChild(btn);
       });
+    }
+
+    // 渲染日期选择器
+    function renderDaySelector() {
+      daySelector.innerHTML = '';
+      if (!selectedYear || !selectedMonth) return;
+      const days = [...new Set(images.filter(img => img.year === selectedYear && img.month === selectedMonth).map(img => img.day))];
+      days.forEach(day => {
+        const btn = document.createElement('button');
+        btn.textContent = day;
+        btn.className = 'date-btn' + (selectedDay === day ? ' active' : '');
+        btn.onclick = () => {
+          selectedDay = day;
+          renderDaySelector();
+          renderPhotoGrid();
+        };
+        daySelector.appendChild(btn);
+      });
+    }
+
+    // 渲染照片网格
+    function renderPhotoGrid() {
+      photoGrid.innerHTML = '';
+      if (selectedYear && selectedMonth && selectedDay) {
+        const filtered = images.filter(img =>
+          img.year === selectedYear && img.month === selectedMonth && img.day === selectedDay
+        );
+        if (filtered.length === 0) {
+          photoGrid.innerHTML = '<div style="text-align:center;color:#ccc;">该日期暂无照片</div>';
+          return;
+        }
+        const grid = document.createElement('div');
+        grid.className = 'photo-grid';
+        filtered.forEach(img => {
+          const item = document.createElement('div');
+          item.className = 'photo-item';
+          const imageEl = document.createElement('img');
+          imageEl.src = img.src;
+          imageEl.alt = img.name;
+          const nameEl = document.createElement('div');
+          nameEl.className = 'photo-name';
+          nameEl.textContent = img.name;
+          item.appendChild(imageEl);
+          item.appendChild(nameEl);
+          grid.appendChild(item);
+        });
+        photoGrid.appendChild(grid);
+      }
     }
 
     // 初始化
-    renderDateSelector();
     renderSlider(images);
     startSlider(images);
+    renderYearSelector();
 
   </script>
 </body>
