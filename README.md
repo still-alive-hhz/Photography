@@ -1,2 +1,2 @@
 # Photography
-My photos
+My photos.
